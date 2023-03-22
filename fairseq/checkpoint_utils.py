@@ -200,6 +200,8 @@ def load_checkpoint(cfg: CheckpointConfig, trainer, **passthrough_args):
     ``trainer.get_train_iterator``.
     """
 
+    print(f"cfg.checkpoint: {cfg}")
+
     reset_optimizer = cfg.reset_optimizer
     reset_lr_scheduler = cfg.reset_lr_scheduler
     optimizer_overrides = ast.literal_eval(cfg.optimizer_overrides)
@@ -252,6 +254,7 @@ def load_checkpoint(cfg: CheckpointConfig, trainer, **passthrough_args):
             "can not be specified together: " + str(cfg)
         )
 
+    print(f"checkpoint path: {checkpoint_path}")
     extra_state = trainer.load_checkpoint(
         checkpoint_path,
         reset_optimizer,

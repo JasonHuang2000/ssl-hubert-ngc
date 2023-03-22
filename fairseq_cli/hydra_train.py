@@ -19,9 +19,11 @@ from argparse import Namespace
 
 import hydra
 from hydra.core.hydra_config import HydraConfig
-from hydra._internal.utils import _run_hydra, get_args_parser
+from hydra._internal.utils import  get_args_parser
 from hydra.core.utils import _flush_loggers, configure_log
 from hydra.types import TaskFunction
+
+from fairseq_cli.hydra_utils.utils import _run_hydra
 
 
 import torch
