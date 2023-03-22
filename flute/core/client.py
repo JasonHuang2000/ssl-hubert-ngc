@@ -312,6 +312,19 @@ class Client:
         # initialize the fairseq trainer
         fs_trainer = fairseq_trainer(fairseq_cfg, task, model, criterion, quantizer)
 
+        # initialize the model updater
+        update_model = task.build_model(fairseq_cfg.model) 
+        update_optimizer = torch.optim.Adam(update_model.parameters(), 
+                                            lr=0.0005, 
+                                            betas=(0.9,0.98), 
+                                            eps=1e-06, 
+                                            weight_decay=0.01, 
+                                            amsgrad=False)
+        update_model.cuda()
+        update_model.train()
+        update_model.zero_grad()
+
+
         # # Make the trainer
         # trainer = Trainer(
         #     model=model,
@@ -421,6 +434,8 @@ class Client:
         fs_trainer.reset_gradient_power() 
         num_samples = 0
         accum_loss = 0
+        print(f"epoch_itr.next_epoch_idx: {epoch_itr.next_epoch_idx}")
+        print(f"max_epoch: {max_epoch}")
         while epoch_itr.next_epoch_idx <= max_epoch:
             # break
             if lr <= fairseq_cfg.optimization.stop_min_lr:
@@ -450,6 +465,44 @@ class Client:
                 # don't cache epoch iterators for sharded datasets
                 disable_iterator_cache=task.has_sharded_data("train"),
             )
+
+            '''
+            # experiment for payload transmitting
+            for p, data in zip(fs_trainer.model.parameters(), model_parameters):
+                data = to_device(data)
+                p.grad = data - p.data
+
+
+            for p in fs_trainer.model.parameters():
+                p.grad = num_sample * p.grad
+            
+            payload = {}
+            payload['weight'] = num_sample
+            payload['gradients'] = [p.grad.to(torch.device('cpu')) for p in fs_trainer.model.parameters()]
+
+            for p, client_grad in zip(update_model.parameters(), payload['gradients']):
+                if p.grad is None:
+                    p.grad = to_device(client_grad)
+                else:
+                    p.grad += to_device(client_grad)
+
+            torch.cuda.empty_cache()
+
+            # Normalize with weight_sum
+            for p in update_model.parameters():
+                p.grad /= payload['weight']
+
+            update_optimizer.step()
+            update_optimizer.zero_grad()
+
+            model_parameters = [p.data.to(torch.device('cpu')) for p in update_model.parameters()]
+
+            for p, data in zip(fs_trainer.model.parameters(), model_parameters):
+                p.data = data.detach().clone().cuda() if torch.cuda.is_available() else data.detach().clone()
+            '''
+
+
+
         train_meter.stop()
         fs_trainer.estimate_sufficient_stats()
 
@@ -481,6 +534,7 @@ class Client:
         # Compute pseudo-gradient
         # print_rank(f"Fairseq trainer parameters: {fs_trainer.model.parameters()}")
         # print_rank(f"Model parameters: {model_parameters}")
+
         if not send_dicts:
             for p, data in zip(fs_trainer.model.parameters(), model_parameters):
                 data = to_device(data)
@@ -490,11 +544,14 @@ class Client:
                 # print_rank(f"p data type: {type(p.data[0])}")
                 # print_rank(data.dtype)
                 # print_rank(p.data.dtype)
-                p.grad = data.to(dtype=torch.float16) - p.data
+                p.grad = data - p.data
+                # print(f"p.grad: {p.grad}")
 
-        print_rank("Success!")
+        print_rank(f"Success!. Send Graidents: {send_gradients}")
 
         payload = strategy.generate_client_payload(fs_trainer, num_samples) if send_gradients else None
+
+
 
         # TODO: Personalization?
         # if config['server_config']['type'] == 'personalization':

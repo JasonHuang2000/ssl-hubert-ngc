@@ -484,6 +484,7 @@ class Trainer(object):
         logger.info(f"Preparing to load checkpoint {filename}")
         is_distributed = self.data_parallel_world_size > 1
         bexists = PathManager.isfile(filename)
+        
         if bexists:
             load_on_all_ranks = (
                 self.cfg.checkpoint.load_checkpoint_on_all_dp_ranks
@@ -605,6 +606,7 @@ class Trainer(object):
             extra_state = state["extra_state"]
             self._optim_history = state["optimizer_history"]
 
+        # print(f"last_optim_state: {last_optim_state}, reset_optimizer: {reset_optimizer}")
         if last_optim_state is not None and not reset_optimizer:
             # rebuild optimizer after loading model, since params may have changed
             self._build_optimizer()

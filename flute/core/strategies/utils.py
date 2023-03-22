@@ -28,6 +28,8 @@ def aggregate_gradients_inplace(model, gradients):
 
     for p, client_grad in zip(model.parameters(), gradients):
         if p.grad is None:
+            print("No grad...")
             p.grad = to_device(client_grad)
         else:
+            print("Adding grad...")
             p.grad += to_device(client_grad)

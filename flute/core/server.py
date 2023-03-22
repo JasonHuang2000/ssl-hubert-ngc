@@ -139,6 +139,8 @@ class OptimizationServer(federated.Server):
             model_type=self.model_type,
             decoder_config=decoder_config
         )
+
+        
         self.metrics['worker_trainer'] = self.worker_trainer
         # Creating an instance for the server-side trainer (runs mini-batch SGD)
         self.server_replay_iterations = None
@@ -362,6 +364,7 @@ class OptimizationServer(federated.Server):
                     client_norm_grad = client_output['rg']
                     client_payload = client_output['pl']
 
+
                     if apply_privacy_metrics:
                         privacy_stats = client_output['ps']
                         for metric, value in privacy_stats.items():
@@ -372,7 +375,7 @@ class OptimizationServer(federated.Server):
                     # Get actual pseudo-gradients for aggregation
                     payload_processed = self.strategy.process_individual_payload(self.worker_trainer, client_payload)
                     if not payload_processed:
-                        print_rank('Dropping client', loglevel=logging.DEBUG)
+                        print_rank('Dropping client', loglevel=logging.INFO)
                         num_clients_curr_iter -= 1
                         continue
 
@@ -434,6 +437,7 @@ class OptimizationServer(federated.Server):
                 log_metric('Training loss', sum(self.train_loss))
 
                 # Combine payloads
+                print("Combining payload...")
                 self.strategy.combine_payloads(
                     worker_trainer=self.worker_trainer,
                     curr_iter=i,

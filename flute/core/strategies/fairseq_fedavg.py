@@ -183,6 +183,7 @@ class FairseqFedAvg(BaseStrategy):
 
         if not self.aggregate_fast:
             for client_parameters in self.client_parameters_stack:
+                print("popping from stack...")
                 # Model parameters are already multiplied with weight on client, we only have to sum them up
                 aggregate_gradients_inplace(worker_trainer.model, client_parameters)
         weight_sum = sum(client_weights)

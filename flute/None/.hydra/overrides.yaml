@@ -1,4 +1,0 @@
-- task.data=/tmp2/willymen/librispeech/LibriSpeech/dev-clean/manifest
-- task.label_dir=/tmp2/willymen/librispeech/LibriSpeech/dev-clean/labels
-- task.labels=["km"]
-- model.label_rate=100

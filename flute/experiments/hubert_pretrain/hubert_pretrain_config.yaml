@@ -40,7 +40,7 @@ strategy: FairseqFedAvg
 
 # Configurations for the FL simulation
 fl_config:
-    total_clients: 3                                  # total number of clients in the FL system
+    total_clients: 10                                  # total number of clients in the FL system
     fairseq_config_dir: /tmp2/willymen/fairseq/examples/hubert/config/pretrain
     config_name: hubert_base_librispeech 
     epoch_per_update: 1
@@ -63,8 +63,8 @@ server_config:
     rec_freq: 5                                    # Frequency for testing rounds
     initial_val : false                              # Enable initial validation round at itr=0
     initial_rec: false                              # Enable initial testing round at itr=0
-    max_iteration: 5                            # Total number of rounds for FL
-    num_clients_per_iteration: 3                  # Number of clients sampled per round
+    max_iteration: 50                            # Total number of rounds for FL
+    num_clients_per_iteration: 1                  # Number of clients sampled per round
     data_config:                                    # Server-side data configuration
         val:                                        # Validation data
             val_data: data/mlm_bert/val_data.txt

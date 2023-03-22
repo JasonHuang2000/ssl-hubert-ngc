@@ -27,6 +27,9 @@ from torch.optim.lr_scheduler import (
 def make_optimizer(optimizer_config, model):
     """Initialization for optimizer."""
 
+    print(f"optimzer_config: {optimizer_config}")
+    # print(f"Model: {model}")
+
     tmp_config = copy.deepcopy(optimizer_config)
     if optimizer_config["type"] == "sgd":
         tmp_config.pop("type", None)

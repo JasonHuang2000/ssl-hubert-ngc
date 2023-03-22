@@ -120,7 +120,6 @@ def run_worker(model_path, config, task, data_path, local_rank, backend):
     # declare fairseq related stuff: model, task, criterion
     task = tasks.setup_task(fairseq_cfg.task)
 
-    print(f"The cfg task: {fairseq_cfg.task}")
 
     # Load valid dataset (we load training data below, based on the latest checkpoint)
     # We load the valid dataset AFTER building the model
@@ -189,8 +188,15 @@ def run_worker(model_path, config, task, data_path, local_rank, backend):
 
             print_rank("Prepared the dataloaders")
 
-            # Create the optimizer on the server
-            optimizer = make_optimizer(server_config["optimizer_config"], model)
+            # Create the optimizer on the server, to update global model 
+            # with pre-calculated gradient collected from clients
+            # print(fairseq_cfg)
+            optimizer = torch.optim.Adam(model.parameters(), 
+                                            lr=fairseq_cfg["optimization"]["lr"][0], 
+                                            betas=eval(fairseq_cfg["optimizer"]["adam_betas"]), 
+                                            eps=fairseq_cfg["optimizer"]["adam_eps"], 
+                                            weight_decay=fairseq_cfg["optimizer"]["weight_decay"], 
+                                            amsgrad=False)
 
             # Load a model that's already trained
             
