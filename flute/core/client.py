@@ -258,6 +258,7 @@ class Client:
         initial_lr, model_parameters, iteration = server_data
         config = copy.deepcopy(config)
 
+
         model_config = config['model_config']
         client_config = config['client_config']
         data_config = client_config['data_config']['train']
@@ -280,6 +281,8 @@ class Client:
         print_rank('Loading : {}-th client, {}s elapsed'.format(
             client_id[0], time.time() - begin), loglevel=logging.INFO)
 
+        
+
         # Get dataloaders
         # train_dataloader = make_train_dataloader(data_config, data_path, task=task, clientx=0, data_strct=data_strct)
 
@@ -296,9 +299,10 @@ class Client:
         n_layers, n_params = len([f for f in model.parameters()]), len(model_parameters)
         print_rank(f'Copying model parameters... {n_layers}/{n_params}', loglevel=logging.DEBUG)
         model = to_device(model)
+        
 
         if send_dicts: # Send model state dictionary
-            print_rank(f'Loading model parameters...')
+            print_rank(f'Loading model parameters from dictionary...')
             tmp = {}
             for param_key, param_dict in zip (model.state_dict(), model_parameters):
                 tmp[param_key] = param_dict
@@ -308,9 +312,9 @@ class Client:
                 p.data = data.detach().clone().cuda() if torch.cuda.is_available() else data.detach().clone()
         print_rank(f'Model setup complete. {time.time() - begin}s elapsed.', loglevel=logging.DEBUG)
 
-
         # initialize the fairseq trainer
         fs_trainer = fairseq_trainer(fairseq_cfg, task, model, criterion, quantizer)
+            
 
         # initialize the model updater
         update_model = task.build_model(fairseq_cfg.model) 
@@ -433,7 +437,7 @@ class Client:
         # clear the stats for this epoch 
         fs_trainer.reset_gradient_power() 
         num_samples = 0
-        accum_loss = 0
+        training_loss = 0
         print(f"epoch_itr.next_epoch_idx: {epoch_itr.next_epoch_idx}")
         print(f"max_epoch: {max_epoch}")
         while epoch_itr.next_epoch_idx <= max_epoch:
@@ -448,9 +452,9 @@ class Client:
 
             # train for one epoch
             should_stop, num_sample, loss = fairseq_train(fairseq_cfg, fs_trainer, task, epoch_itr)
-            # print_rank(f"num sample: {num_sample}")
+            print_rank(f"Total loss for epoch {epoch_itr.next_epoch_idx - 1}: {loss}")
             num_samples += num_sample
-            accum_loss += loss
+            training_loss = loss
             if should_stop:
                 break
 
@@ -467,41 +471,59 @@ class Client:
             )
 
             '''
-            # experiment for payload transmitting
-            for p, data in zip(fs_trainer.model.parameters(), model_parameters):
-                data = to_device(data)
-                p.grad = data - p.data
+            with torch.no_grad():
+                # experiment for payload transmitting
+                for p, data in zip(fs_trainer.model.parameters(), model_parameters):
+                    data = to_device(data)
+                    p.grad = p.data
 
 
-            for p in fs_trainer.model.parameters():
-                p.grad = num_sample * p.grad
+                for p in fs_trainer.model.parameters():
+                    p.grad = num_samples * p.grad
+                
+                payload = {}
+                payload['weight'] = num_samples
+                payload['gradients'] = [p.grad.to(torch.device('cpu')) for p in fs_trainer.model.parameters()]
+
+                for p, client_grad in zip(update_model.parameters(), payload['gradients']):
+                    if p.grad is None:
+                        p.grad = to_device(client_grad)
+                    else:
+                        p.grad += to_device(client_grad)
+
+                torch.cuda.empty_cache()
+
+                # Normalize with weight_sum
+                for p in update_model.parameters():
+                    p.grad /= payload['weight']
+
+                for p in update_model.parameters():
+                    updated_weight = p.grad
+                    p.data.copy_(updated_weight)
+
+                # update_optimizer.step()
+                update_optimizer.zero_grad()
+
             
-            payload = {}
-            payload['weight'] = num_sample
-            payload['gradients'] = [p.grad.to(torch.device('cpu')) for p in fs_trainer.model.parameters()]
+                cp_path = checkpoint_utils.save_checkpoint(
+                    fairseq_cfg.checkpoint, fs_trainer, epoch_itr, 0
+                )
 
-            for p, client_grad in zip(update_model.parameters(), payload['gradients']):
-                if p.grad is None:
-                    p.grad = to_device(client_grad)
-                else:
-                    p.grad += to_device(client_grad)
 
-            torch.cuda.empty_cache()
+                fs_trainer = fairseq_trainer(fairseq_cfg, task, model, criterion, quantizer)
 
-            # Normalize with weight_sum
-            for p in update_model.parameters():
-                p.grad /= payload['weight']
+                extra_state, epoch_itr = checkpoint_utils.load_checkpoint(
+                    fairseq_cfg.checkpoint,
+                    fs_trainer,
+                    # don't cache epoch iterators for sharded datasets
+                    disable_iterator_cache=task.has_sharded_data("train"),
+                )
 
-            update_optimizer.step()
-            update_optimizer.zero_grad()
+                model_parameters = [p.data.to(torch.device('cpu')) for p in update_model.parameters()]
 
-            model_parameters = [p.data.to(torch.device('cpu')) for p in update_model.parameters()]
-
-            for p, data in zip(fs_trainer.model.parameters(), model_parameters):
-                p.data = data.detach().clone().cuda() if torch.cuda.is_available() else data.detach().clone()
+                for p, data in zip(fs_trainer.model.parameters(), model_parameters):
+                    p.data = data.detach().clone().cuda() if torch.cuda.is_available() else data.detach().clone()
             '''
-
-
 
         train_meter.stop()
         fs_trainer.estimate_sufficient_stats()
@@ -531,21 +553,24 @@ class Client:
         # trainer.num_samples = num_samples
         # trainer.algo_computation = algo_computation
 
+        
+
         # Compute pseudo-gradient
         # print_rank(f"Fairseq trainer parameters: {fs_trainer.model.parameters()}")
         # print_rank(f"Model parameters: {model_parameters}")
 
         if not send_dicts:
-            for p, data in zip(fs_trainer.model.parameters(), model_parameters):
-                data = to_device(data)
-                # print_rank(f"Data: {data}")
-                # print_rank(f"P data: {p.data}")
-                # print_rank(f"data type: {type(data[0])}")
-                # print_rank(f"p data type: {type(p.data[0])}")
-                # print_rank(data.dtype)
-                # print_rank(p.data.dtype)
-                p.grad = data - p.data
-                # print(f"p.grad: {p.grad}")
+            with torch.no_grad():
+                for p, data in zip(fs_trainer.model.parameters(), model_parameters):
+                    data = to_device(data)
+                    # print_rank(f"Data: {data}")
+                    # print_rank(f"P data: {p.data}")
+                    # print_rank(f"data type: {type(data[0])}")
+                    # print_rank(f"p data type: {type(p.data[0])}")
+                    # print_rank(data.dtype)
+                    # print_rank(p.data.dtype)
+                    p.grad = p.data
+                    # print(f"p.grad: {p.grad}")
 
         print_rank(f"Success!. Send Graidents: {send_gradients}")
 
@@ -623,7 +648,7 @@ class Client:
         # Create dictionary that is sent back to server
         client_output = {
             'cs': client_stats, 
-            'tl': accum_loss, 
+            'tl': training_loss, 
             'mg': fs_trainer.sufficient_stats['mag'],
             'vg': fs_trainer.sufficient_stats['var'],
             'ng': fs_trainer.sufficient_stats['mean'],

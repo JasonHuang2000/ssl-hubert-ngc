@@ -291,10 +291,10 @@ class OptimizationServer(federated.Server):
                 self.train_loss = []
 
                 if self.send_dicts: # Send state dictionaries
-                    print_rank("sending dicts...")
+                    print_rank("sending model as dictionary...")
                     glob_payload = [self.worker_trainer.model.state_dict()[param_key].to(torch.device('cpu')) for param_key in self.worker_trainer.model.state_dict()]
                 else: # Send parameters
-                    print_rank("not sending dicts...")
+                    print_rank("sending model as parameters...")
                     glob_payload = [p.data.to(torch.device('cpu')) for p in self.worker_trainer.model.parameters()]
                 
                 server_data = (initial_lr, glob_payload, i)
@@ -436,8 +436,9 @@ class OptimizationServer(federated.Server):
                 # Log the training loss to tensorboard/AML
                 log_metric('Training loss', sum(self.train_loss))
 
-                # Combine payloads
-                print("Combining payload...")
+                
+                # Combine payloads and update server model
+                print("Combining payload to update server model...")
                 self.strategy.combine_payloads(
                     worker_trainer=self.worker_trainer,
                     curr_iter=i,
@@ -446,6 +447,7 @@ class OptimizationServer(federated.Server):
                     client_stats=client_stats,
                     logger=log_metric,
                 )
+
                 
                 # Run a couple of iterations of training data on the server
                 # if self.server_trainer is not None:
@@ -489,7 +491,7 @@ class OptimizationServer(federated.Server):
                 #         self.lr_weight *= self.lr_decay_factor
                 #         print_rank('LOG: Client weight of learning rate {}..'.format(self.lr_weight))
 
-
+                '''
                 # Do validation
                 # initialize the fairseq trainer
                 fs_trainer = fairseq_trainer(self.fairseq_cfg, self.task, 
@@ -533,6 +535,7 @@ class OptimizationServer(federated.Server):
 
                 # Fall back to the best model if the option is enabled
                 self.fall_back_to_prev_best_status()
+                '''
 
                 # Logging the latest best values only after the 1st val/test round has been executed
                 if len(self.metrics) > 1:

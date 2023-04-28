@@ -25,11 +25,10 @@ def aggregate_gradients_inplace(model, gradients):
         model (torch.nn.Module): model to which gradients will be summed.
         gradients (list): list of gradients to sum to model.
     '''
-
     for p, client_grad in zip(model.parameters(), gradients):
         if p.grad is None:
-            print("No grad...")
+            # print("No grad...")
             p.grad = to_device(client_grad)
         else:
-            print("Adding grad...")
+            # print("Adding grad...")
             p.grad += to_device(client_grad)

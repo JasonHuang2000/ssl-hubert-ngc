@@ -78,11 +78,13 @@ class FairseqFedAvg(BaseStrategy):
 
         # Weight the gradient and remove gradients of the layers we want to freeze
         weight = num_samples # number of samples per epoch
-        for n, p in fairseq_trainer.model.named_parameters():
-            p.grad = weight * p.grad
-            if self.model_config.get('freeze_layer', None) and n == self.model_config['freeze_layer']:
-                print_rank('Setting gradient to zero for layer: {}'.format(n), loglevel=logging.INFO)
-                p.grad.mul_(0)
+        print(f"client weight: {weight}")
+        with torch.no_grad():
+            for n, p in fairseq_trainer.model.named_parameters():
+                p.grad = weight * p.grad
+                if self.model_config.get('freeze_layer', None) and n == self.model_config['freeze_layer']:
+                    print_rank('Setting gradient to zero for layer: {}'.format(n), loglevel=logging.INFO)
+                    p.grad.mul_(0)
 
         payload = {}
         payload['weight'] = weight
@@ -110,13 +112,15 @@ class FairseqFedAvg(BaseStrategy):
             return False
 
         self.client_weights.append(payload['weight'])
-        if self.aggregate_fast:
-            aggregate_gradients_inplace(worker_trainer.model, payload['gradients'])
-        else:
-            self.client_parameters_stack.append(payload['gradients'])
+        with torch.no_grad():
+            if self.aggregate_fast:
+                aggregate_gradients_inplace(worker_trainer.model, payload['gradients'])
+            else:
+                self.client_parameters_stack.append(payload['gradients'])
         return True
 
-    def combine_payloads(self, worker_trainer, curr_iter, num_clients_curr_iter, total_clients, client_stats, logger=None):
+    def combine_payloads(self, worker_trainer, curr_iter, num_clients_curr_iter, 
+                        total_clients, client_stats, logger=None, update_with_optimizer=False):
         '''Combine payloads to update model
 
         Args:
@@ -130,7 +134,7 @@ class FairseqFedAvg(BaseStrategy):
         Returns:
             losses, computed for use with LR scheduler.
         '''
-
+        
         if self.mode != 'server':
             raise RuntimeError('this method can only be invoked by the server')
 
@@ -143,6 +147,7 @@ class FairseqFedAvg(BaseStrategy):
         torch.cuda.empty_cache()
 
         # Normalize with weight_sum
+        print(f"weighted sum: {weight_sum}")
         for p in worker_trainer.model.parameters():
             p.grad /= weight_sum
 
@@ -156,9 +161,22 @@ class FairseqFedAvg(BaseStrategy):
             return
 
         # Run optimization with gradient/model aggregated from clients
-        print_rank('Updating model')
-        worker_trainer.update_model()
-        print_rank('Updating learning rate scheduler')
+        if update_with_optimizer == True:
+            print_rank('Updating model with optimizer step...')
+            # worker_trainer.update_model()
+
+            # worker_trainer.optimizer.step()
+            worker_trainer.optimizer.zero_grad()
+        else:
+            print_rank('Updating model by directly adding averaged (lr * gradient) from each client...')
+            for p in worker_trainer.model.parameters():
+                # since p.grad store (server_model - averaged_client_model), 
+                # simply subtraction do the trick
+                updated_weight = p.grad
+                p.data.copy_(updated_weight)
+                # p.data = updated_weight
+            worker_trainer.optimizer.zero_grad()
+
         # losses = worker_trainer.run_lr_scheduler(force_run_val=False)
 
         # TODO: Global DP. See dga.py
@@ -181,9 +199,12 @@ class FairseqFedAvg(BaseStrategy):
         if metric_logger is None:
             metric_logger = run.log
 
+        # just in case
+        worker_trainer.optimizer.zero_grad()
+
         if not self.aggregate_fast:
             for client_parameters in self.client_parameters_stack:
-                print("popping from stack...")
+                print("popping from parameters stack...")
                 # Model parameters are already multiplied with weight on client, we only have to sum them up
                 aggregate_gradients_inplace(worker_trainer.model, client_parameters)
         weight_sum = sum(client_weights)

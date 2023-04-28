@@ -18,7 +18,7 @@ distributed_training:
   distributed_backend: 'nccl'
   distributed_world_size: 1
   distributed_port: 29671
-  nprocs_per_node: 4
+  nprocs_per_node: 5
   find_unused_parameters: true
 
 task:

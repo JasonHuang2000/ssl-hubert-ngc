@@ -158,6 +158,7 @@ def run_worker(model_path, config, task, data_path, local_rank, backend):
     if torch.cuda.is_available():
         print_rank(f"Assigning worker to GPU {LOCAL_RANK}")
         device = torch.device("cuda:{}".format(LOCAL_RANK))
+        print_rank(f"device: {device}")
         torch.cuda.set_device(device)
 
     # Get evaluation datasets

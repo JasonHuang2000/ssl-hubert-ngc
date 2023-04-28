@@ -261,6 +261,7 @@ def should_stop_early(cfg: DictConfig, valid_loss: float) -> bool:
             return False
 
 
+@metrics.aggregate("train")
 def fairseq_train(
     cfg: DictConfig, trainer: fs_trainer, task: tasks.FairseqTask, epoch_itr
 ) -> Tuple[List[Optional[float]], bool]:
@@ -343,6 +344,8 @@ def fairseq_train(
             num_updates = trainer.get_num_updates()
             if num_updates % cfg.common.log_interval == 0:
                 stats = get_training_stats(metrics.get_smoothed_values("train_inner"))
+                stat = metrics.get_smoothed_values("train_inner")
+                # print(f"Time to log bro..., {stat}")
                 progress.log(stats, tag="train_inner", step=num_updates)
 
                 # reset mid-epoch stats after each log interval
@@ -366,7 +369,7 @@ def fairseq_train(
 
     # reset epoch-level meters
     metrics.reset_meters("train")
-    return should_stop, num_samples, total_loss
+    return should_stop, num_samples, stats['loss']
 
 
 def fairseq_validate_and_save(

@@ -132,15 +132,9 @@ class ModelUpdater(TrainerBase):
             grad_norm = nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
             print_rank(f"clipped norm: {grad_norm} to {min(grad_norm,self.max_grad_norm)}", logging.DEBUG)
 
-        # Do optimizer step
-        # for p in self.model.parameters():
-        #     print(p.grad)
-
         self.optimizer.step()
         self.optimizer.zero_grad()
 
-        # for p in self.model.parameters():
-        #     print(p.grad)
 
     def run_lr_scheduler(self, force_run_val=False):
         """Update learning rate using scheduler."""

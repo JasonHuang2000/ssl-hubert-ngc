@@ -108,6 +108,7 @@ class Trainer(object):
             elif cfg.common.amp:
                 self._amp_retries = 0
 
+
         if (
             not cfg.distributed_training.pipeline_model_parallel
             # the DistributedFairseqModel wrapper will handle moving to device,
@@ -854,6 +855,11 @@ class Trainer(object):
             "mag": mag_grad,
             "norm": norm_grad
         }
+
+    @metrics.aggregate("update_step")
+    def update_step(self, raise_oom=False):
+        pass
+
 
     @metrics.aggregate("train")
     def train_step(self, samples, raise_oom=False):

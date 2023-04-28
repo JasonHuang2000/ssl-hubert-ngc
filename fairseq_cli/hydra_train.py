@@ -46,6 +46,7 @@ def main(
     config_name: Optional[str] = None,
     strict: Optional[str] = None,
 ) -> Callable[[TaskFunction], Any]:
+
     """
     :param config_path: The config path, a directory relative to the declaring python file.
                         If config_path is None no directory is added to the Config search path.
