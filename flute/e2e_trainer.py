@@ -191,13 +191,7 @@ def run_worker(model_path, config, task, data_path, local_rank, backend):
 
             # Create the optimizer on the server, to update global model 
             # with pre-calculated gradient collected from clients
-            # print(fairseq_cfg)
-            optimizer = torch.optim.Adam(model.parameters(), 
-                                            lr=fairseq_cfg["optimization"]["lr"][0], 
-                                            betas=eval(fairseq_cfg["optimizer"]["adam_betas"]), 
-                                            eps=fairseq_cfg["optimizer"]["adam_eps"], 
-                                            weight_decay=fairseq_cfg["optimizer"]["weight_decay"], 
-                                            amsgrad=False)
+            optimizer = make_optimizer(server_config["optimizer_config"], model)
 
             # Load a model that's already trained
             

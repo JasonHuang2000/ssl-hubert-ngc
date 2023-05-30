@@ -62,12 +62,10 @@ def main(
 
                 args_parser = get_args_parser()
                 args = Namespace(help=False, hydra_help=False, 
-                    overrides=['task.data=/tmp2/willymen/librispeech/LibriSpeech/dev-clean/manifest', 
-                    'task.label_dir=/tmp2/willymen/librispeech/LibriSpeech/dev-clean/labels', 
-                    'task.labels=["km"]', 'model.label_rate=100'], cfg=None, package=None, run=False, 
+                    overrides=[], cfg=None, package=None, run=False, 
                     multirun=False, shell_completion=False, config_path=None, 
-                    config_name='hubert_base_librispeech', 
-                    config_dir='/tmp2/willymen/fairseq/examples/hubert/config/pretrain', 
+                    config_name='fairseq_config', 
+                    config_dir='/ntu-jason', 
                     info=False)
                 
                 # no return value from run_hydra() as it may sometime actually run the task_function
